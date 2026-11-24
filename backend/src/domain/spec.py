@@ -41,7 +41,7 @@ SPEC = {
     "decision": "公开披露复核",
     "action": "提交发布决定",
     "modes": ["同意发布", "暂缓发布", "请求更正源数据"],
-    "pages": ["招生月报总览", "受理明细", "公开口径", "报名转化交叉表", "公开披露复核", "公开表交付"],
+    "pages": ["招生月报总览", "受理明细", "公开口径", "报名转化交叉表", "公开披露复核", "公开表交付", "月底回测（内部）"],
     "fields": [
         {"key": "learner_id", "label": "学员编号", "type": "string", "required": True, "max_length": 80},
         {"key": "intake_date", "label": "受理日期", "type": "date", "required": True},

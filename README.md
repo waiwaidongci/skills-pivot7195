@@ -18,6 +18,7 @@
 | 报名转化交叉表 | 查看业务指标、证据表和解释，通过来源链接回查数据。 |
 | 公开披露复核 | 查看待处理或已完成记录。复核主管可提交公开披露复核及依据。 |
 | 公开表交付 | 按批查找结果，核对复核状态并下载相应的 CSV。 |
+| 月底回测（内部） | 用月末前最后一批圈定学员，按成熟月份同渠道同项目合并转化率估算确认报名；满 30 天后核对实绩与误差。分析员与复核主管可见。 |
 
 ## 启动
 
@@ -54,15 +55,35 @@ docker compose exec -T backend python -m scripts.seed_demo
 - 确认与未确认人数各自都须达到门槛，否则整格隐藏人数和比率，图表跳过该格，并省略所有行、列及总体合计。零受理组合使用同一抑制标记。
 - 小单元格抑制用于控制单张交叉表的披露。它不提供差分隐私保证，修订版、不同门槛和外部数据仍可能被联立推算。发布前应对照已有版本复核。
 
+### 月底回测（内部分析）
+
+- 预测批次为目标月末前最后入库、且含当月受理记录的批次，在发起回测时写死到任务上。接口中断或后台重试都沿用同一批次；之后并发补传只影响新发起的回测，已出的预测原样保留。
+- 圈定学员为预测批次中当月去重的受理学员，沿用公开表的月内归属规则。
+- 估算样本为早于目标月、且已月末满 30 天的月份。按渠道 × 项目把样本月的确认人数与受理人数合并后求转化率，再乘以当月圈定人数。没有样本的单元格标记「缺估算样本」，不按 0 计入预估合计。
+- 实绩在目标月末满 30 天后补齐，取该时点前最后入库的批次，只核对预测时圈定的学员在目标月的确认；不重新归属、不纳入新学员。缺批或缺学员都会标出。
+- 发起时找不到含当月数据的批次仍建立任务并标记「缺批」，便于后续查看。误差只在实绩写入时记录，不因之后补传而重算。
+- 该页仅分析员与复核主管可见，预测与实绩不进入公开交付。
+
 ## 本地开发
 
 | 组件 | 实现 |
 |---|---|
 | 前端 | Nginx 与原生 HTML、CSS、JavaScript。`frontend/src/pages` 放页面，`components/common` 放共用表格、图表及表单。 |
 | API | Python 3.11、FastAPI、SQLAlchemy。`backend/src/domain` 放本项目字段、业务计算和演示数据，`routes` 放接口，`models` 放表模型。 |
-| 后台 | 独立 Python worker，通过 Redis 唤醒，从数据库租约领取计算，CSV 写入共享卷。 |
+| 后台 | 独立 Python worker，通过 Redis 唤醒，从数据库租约领取计算，CSV 写入共享卷。回测的预测与实绩也在此执行。 |
 | 数据 | MySQL 8 存储批次、运行与审计。`backend/scripts/seed_demo.py` 可安全重复执行。 |
 
 改动前端后执行 `docker compose up -d --build frontend`。改动接口或算法后执行 `docker compose up -d --build backend worker`，再刷新浏览器。如需保留数据，停止时执行 `docker compose down`。使用 `docker compose down -v --remove-orphans` 会清除该项目的数据库、Redis 和报表卷。
 
-`.env.example` 中的 `COMPOSE_PROJECT_NAME`、`FRONTEND_PORT`、`BACKEND_PORT`、`DB_PORT`、`APP_SUBNET` 控制项目隔离。`DB_PASSWORD`、`JWT_SECRET` 和 `SEED_DEMO` 为本机演示默认设置。后端 `constants/enums.py` 与前端 `src/constants/enums.js` 保持角色、运行状态和复核状态一致。项目许可证见 `LICENSE`。
+`.env.example` 中的 `COMPOSE_PROJECT_NAME`、`FRONTEND_PORT`、`BACKEND_PORT`、`DB_PORT`、`APP_SUBNET` 控制项目隔离。`DB_PASSWORD`、`JWT_SECRET` 和 `SEED_DEMO` 为本机演示默认设置。后端 `constants/enums.py` 与前端 `src/constants/enums.js` 保持角色、运行状态、复核状态和回测状态一致。项目许可证见 `LICENSE`。
+
+### 测试
+
+领域逻辑（批次选择、估算、实绩核对）只依赖标准库，可直接运行：
+
+```bash
+cd backend && python3 -m unittest discover -s tests -v
+```
+
+`tests/test_backtest_flow.py` 需要 FastAPI、SQLAlchemy 与 httpx，用 SQLite 跑通
+「接口发起 → worker 预测 → 到期结算」的完整流程。

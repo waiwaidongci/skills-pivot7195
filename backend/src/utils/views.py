@@ -27,3 +27,27 @@ def schedule(item):
 def delivery(item):
     return {'id': item.id, 'run_id': item.run_id, 'recipient': item.recipient,
             'state': item.state, 'detail': item.detail, 'created_at': iso(item.created_at)}
+
+
+def backtest(item, detail=False, names=None):
+    from src.domain.backtest import maturity_date, settlement_ready
+    from src.utils.time import now
+    names = names or {}
+    prediction, actual = item.prediction, item.actual
+    item_view = {'id': item.id, 'name': item.name, 'period': item.period, 'status': item.status,
+                 'dataset_id': item.dataset_id,
+                 'dataset_name': names.get(item.dataset_id),
+                 'actual_dataset_id': item.actual_dataset_id,
+                 'actual_dataset_name': names.get(item.actual_dataset_id),
+                 'author': item.author, 'error': item.error, 'created_at': iso(item.created_at),
+                 'predicted_at': iso(item.predicted_at), 'settled_at': iso(item.settled_at),
+                 'maturity_date': maturity_date(item.period),
+                 'settlement_ready': settlement_ready(item.period, now()),
+                 'has_prediction': prediction is not None, 'has_actual': actual is not None,
+                 'estimated_enrolled': prediction['estimated_enrolled'] if prediction else None,
+                 'actual_enrolled': actual['actual_enrolled'] if actual else None,
+                 'error_value': actual['error'] if actual else None,
+                 'flags': (actual or prediction or {}).get('flags', [])}
+    if detail:
+        item_view.update(prediction=prediction, actual=actual)
+    return item_view

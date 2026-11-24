@@ -28,3 +28,7 @@ class ScheduleRequest(RunRequest):
     recipient: str = Field(min_length=1, max_length=100)
     first_at: datetime
     repeat_daily: bool = False
+
+class BacktestRequest(Request):
+    name: str = Field(min_length=1, max_length=120)
+    period: str = Field(min_length=7, max_length=7)

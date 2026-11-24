@@ -10,7 +10,12 @@ _SUPPRESSED = "已抑制"
 _PROGRAM_COLUMNS = {f"program_{index}": program for index, program in enumerate(PROGRAMS, 1)}
 
 
-def _validated_intakes(rows):
+def dedupe_intakes(rows):
+    """校验源明细并按“学员 + 自然月”去重，返回原始记录与月度归属。
+
+    归属取该学员当月最早受理日的渠道和项目；转化指当月存在归属项目的确认记录。
+    返回的 intakes 每项为 dict，便于回测按学员圈定和核对。
+    """
     if not isinstance(rows, (list, tuple)) or not rows:
         raise ValueError("受理明细为空，请导入至少一条受理记录。")
     records = []
@@ -39,15 +44,21 @@ def _validated_intakes(rows):
         groups[learner, day[:7]].append((day, channel, program, enrolled))
 
     intakes = []
-    for (_, period), entries in groups.items():
+    for (learner, period), entries in groups.items():
         first_day = min(entry[0] for entry in entries)
         first_assignments = {(channel, program) for day, channel, program, _ in entries if day == first_day}
         if len(first_assignments) != 1:
             raise ValueError("有学员在同月最早受理日存在多个渠道或项目，请核对原始明细后重新导入。")
         channel, program = first_assignments.pop()
         converted = any(project == program and enrolled for _, _, project, enrolled in entries)
-        intakes.append((period, channel, program, converted))
+        intakes.append({"period": period, "learner_id": learner, "channel": channel,
+                        "program": program, "converted": converted, "first_day": first_day})
     return records, intakes
+
+
+def _validated_intakes(rows):
+    records, intakes = dedupe_intakes(rows)
+    return records, [(item["period"], item["channel"], item["program"], item["converted"]) for item in intakes]
 
 
 def validate_rows(rows):

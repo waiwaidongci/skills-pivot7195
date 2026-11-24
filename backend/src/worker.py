@@ -1,6 +1,7 @@
 import logging
 import time
 from pathlib import Path
+from src.services import backtests
 from src.services.execution import claim, execute, materialize_due
 from src.utils.wakeup import wait
 
@@ -18,7 +19,11 @@ def main():
             if lease:
                 execute(lease)
                 heartbeat.touch()
-            else:
+            backtest_lease = backtests.claim()
+            if backtest_lease:
+                backtests.execute(backtest_lease)
+                heartbeat.touch()
+            if not lease and not backtest_lease:
                 wait()
         except Exception:
             log.exception('Worker cycle failed')
